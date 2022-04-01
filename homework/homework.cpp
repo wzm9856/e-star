@@ -56,7 +56,7 @@ public:
 			);
 
 		// Create program from shaders.
-		m_program = myloadProgram("../shaders/", "vs", "fs_bling-phong");
+		m_program = myloadProgram("../shaders/", "vs", "fs_pbr");
 		m_timeOffset = bx::getHPCounter();
 		bx::eye4(model);
 		bx::eye4(preModel);
@@ -64,13 +64,14 @@ public:
 
 		s_texColor = bgfx::createUniform("s_texColor", bgfx::UniformType::Sampler);
 		s_texNormal = bgfx::createUniform("s_texNormal", bgfx::UniformType::Sampler);
+		s_texAORM = bgfx::createUniform("s_texAORM", bgfx::UniformType::Sampler);
 		u_lightPos = bgfx::createUniform("u_lightPos", bgfx::UniformType::Vec4);
 		u_lightRGB = bgfx::createUniform("u_lightRGB", bgfx::UniformType::Vec4);
 		u_eyePos = bgfx::createUniform("u_eyePos", bgfx::UniformType::Vec4);
 		m_mesh = meshLoad("../resource/pbr_stone/pbr_stone_mes.bin");
 		m_textureColor = loadTexture("../resource/pbr_stone/pbr_stone_base_color.dds");
 		m_textureNormal = loadTexture("../resource/pbr_stone/pbr_stone_normal.dds");
-		//m_textureAORM = loadTexture("../resource/pbr_stone/pbr_stone_aorm.tga");
+		m_textureAORM = loadTexture("../resource/pbr_stone/pbr_stone_aorm.tga");
 
 		imguiCreate();
 	}
@@ -82,7 +83,7 @@ public:
 		bgfx::destroy(m_program);
 		bgfx::destroy(m_textureColor);
 		bgfx::destroy(m_textureNormal);
-		//bgfx::destroy(m_textureAORM);
+		bgfx::destroy(m_textureAORM);
 		bgfx::destroy(s_texColor);
 		bgfx::destroy(s_texNormal);
 		bgfx::destroy(u_lightPos);
@@ -204,9 +205,11 @@ public:
 
 			bgfx::setTexture(0, s_texColor, m_textureColor);
 			bgfx::setTexture(1, s_texNormal, m_textureNormal);
+			bgfx::setTexture(2, s_texAORM, m_textureAORM);
 			float lightPos[4] = { -10.0, -10.0, -10.0, 0.0 };
 			bgfx::setUniform(u_lightPos, lightPos);
-			float lightRGB[4] = { 100.0, 100.0, 100.0, 0.0 };
+			float lightIntensity = 5000;
+			float lightRGB[4] = { lightIntensity * 1, lightIntensity * 1, lightIntensity * 1, 0.0 };;
 			bgfx::setUniform(u_lightRGB, lightRGB);
 			float eyePos[4] = { at.x, at.y, at.z, 0.0 };
 			bgfx::setUniform(u_eyePos, eyePos);
@@ -235,6 +238,7 @@ public:
 
 	bgfx::UniformHandle s_texColor;
 	bgfx::UniformHandle s_texNormal;
+	bgfx::UniformHandle s_texAORM;
 	bgfx::UniformHandle u_lightPos;
 	bgfx::UniformHandle u_lightRGB;
 	bgfx::UniformHandle u_eyePos;

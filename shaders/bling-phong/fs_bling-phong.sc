@@ -1,6 +1,6 @@
 $input v_wpos, v_viewdir, v_lightdir, v_normal, v_texcoord0
 
-#include "./common/common.sh"
+#include "../common/common.sh"
 
 SAMPLER2D(s_texColor,  0);
 SAMPLER2D(s_texNormal, 1);

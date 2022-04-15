@@ -13,6 +13,6 @@ void main()
 	v_viewdir = u_eyePos.xyz - v_wpos;
 	v_lightdir = u_lightPos.xyz - v_wpos;
 	v_normal = normalize(mul(mat3(u_model[0]), a_normal));
-	v_texcoord0 = vec2(a_texcoord0.x, -a_texcoord0.y);
+	v_texcoord0 = a_texcoord0;
 	gl_Position = mul(u_viewProj, vec4(v_wpos, 1.0));
 }

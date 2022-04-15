@@ -1,13 +1,10 @@
-$input v_wpos, v_viewdir, v_lightdir, v_normal, v_originNormal, v_texcoord0, temp
+$input v_wpos, v_viewdir, v_lightdir, v_normal, v_texcoord0
 
 #include "../common/common.sh"
 
 SAMPLER2D(s_texColor,  0);
 SAMPLER2D(s_texNormal, 1);
 SAMPLER2D(s_texAORM, 2);
-SAMPLER2D(s_texBrdfLut, 3);
-SAMPLERCUBE(s_texSkyLod, 0);
-SAMPLERCUBE(s_texSkyIrr, 1);
 uniform vec4 u_lightRGB;
 
 const float PI = 3.14159265359;
@@ -51,37 +48,29 @@ float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness)
     return ggx1 * ggx2;
 }
 void main(){
+
 	float r2 = dot(v_lightdir, v_lightdir);
-	vec3 normal_lightdir 	= normalize(v_lightdir); //着色点指向相机/光源
+	vec3 normal_lightdir 	= normalize(v_lightdir);
 	vec3 normal_viewdir 	= normalize(v_viewdir);
-	vec3 normal_reflectdir	= normalize(reflect(-normal_viewdir, v_normal));
 	vec3 half_vec 			= normalize(normal_lightdir + normal_viewdir);
-	float NdV = dot(v_normal, normal_viewdir);
-	float NdL = dot(v_normal, normal_lightdir);
 	
-	vec3 albedo	= texture2D(s_texColor, v_texcoord0).xyz;
+	vec3 color 	= texture2D(s_texColor, v_texcoord0).xyz;
+	vec3 albedo = pow(color, vec3(2.2));
 	vec4 aorm 	= texture2D(s_texAORM, v_texcoord0);
 	float ao 		= aorm.x;
-	float rough 	= aorm.y-0.002;
+	float rough 	= aorm.y;
 	float matallic 	= aorm.z;
 	
-	vec3 F0	= mix(vec3(0.04), albedo, matallic); //金属的反射光有颜色，非金属就是白的
+	vec3 F0 = vec3(0.04);
+	F0      = mix(F0, albedo, matallic); //金属的反射光有颜色，非金属就是白的
 	vec3 F  = fresnelSchlick(max(dot(half_vec, normal_viewdir), 0.0), F0);
 	float D = DistributionGGX(v_normal, half_vec, rough);
 	float G = GeometrySmith(v_normal, normal_viewdir, normal_lightdir, rough);
-	vec3 specular = D * G * F / (4.0 * max(NdV, 0.0) * max(NdL, 0.0) + 0.001); 
+	vec3 specular = D * G * F / (4.0 * max(dot(v_normal, normal_viewdir), 0.0) * max(dot(v_normal, normal_lightdir), 0.0) + 0.001); 
 	
 	vec3 kD = (vec3(1.0) - F) * (1.0 - matallic);
 	
-	vec3 irradiance = textureCube(s_texSkyIrr,v_originNormal).xyz;
-	const float MAXLOD = 6.0;
-	vec3 original_reflectdir = mul(transpose(u_model[0]),vec4(normal_reflectdir, 0.0)).xyz;
-	vec3 envSpecularColor = textureCubeLod(s_texSkyLod, original_reflectdir, MAXLOD * rough).xyz;
-	vec2 brdf = texture2D(s_texBrdfLut, vec2(max(NdV, 0), 1.0-rough)).xy; //这个的uv坐标又是正确的右u上v了
-	vec3 envSpecular = envSpecularColor * (F * brdf.x + brdf.y);
-	
-	vec3 directColor = (kD * albedo / PI + specular) * u_lightRGB.xyz / r2 * max(dot(v_normal, normal_lightdir), 0);
-	vec3 envColor = albedo * irradiance + envSpecular;
-	gl_FragColor = vec4(directColor + envColor * ao, 0);
-	//gl_FragColor = vec4(1,1,1,0);
+    gl_FragColor = vec4((kD * albedo / PI + specular) * u_lightRGB.xyz / r2 * max(dot(v_normal, normal_lightdir), 0.0) + vec3(0.03) * albedo * ao,0);
+	//gl_FragColor = vec4(ambient + diffuse + specular, 0.0);
+	//gl_FragColor = vec4(matallic,0,0,0);
 }

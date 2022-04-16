@@ -28,3 +28,7 @@ shaderc -f ./shadowMap/shadow/vs_shadow.sc -o ./shadowMap/shadow/vs_shadow.bin -
 if errorlevel 1 pause:
 shaderc -f ./shadowMap/shadow/fs_shadow.sc -o ./shadowMap/shadow/fs_shadow.bin --type fragment --platform windows
 if errorlevel 1 pause:
+shaderc -f ./shadowMap/test/vs_test.sc -o ./shadowMap/test/vs_test.bin --type vertex --platform windows
+if errorlevel 1 pause:                                            
+shaderc -f ./shadowMap/test/fs_test.sc -o ./shadowMap/test/fs_test.bin --type fragment --platform windows
+if errorlevel 1 pause:

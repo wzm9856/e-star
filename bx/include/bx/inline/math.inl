@@ -492,6 +492,11 @@ namespace bx
 	{
 	}
 
+	inline Vec3 Quaternion::getVec3()
+	{
+		return Vec3(this->x, this->y, this->z);
+	}
+
 	inline BX_CONSTEXPR_FUNC Vec3 round(const Vec3 _a)
 	{
 		return
@@ -1261,6 +1266,13 @@ namespace bx
 		_result[15] = _a[15];
 	}
 
+	inline void mtx3TransposeInPlace(float* _a)
+	{
+		swap(_a[1], _a[3]);
+		swap(_a[2], _a[6]);
+		swap(_a[5], _a[7]);
+	}
+
 	inline Vec3 calcNormal(const Vec3& _va, const Vec3& _vb, const Vec3& _vc)
 	{
 		const Vec3 ba    = sub(_vb, _va);
@@ -1346,6 +1358,18 @@ namespace bx
 		_a[13] = 0;
 		_a[14] = 0;
 		_a[15] = 1;
+	}
+
+	inline void mtx4toMtx3(float* _dst, const float* _src) {
+		_dst[0] = _src[0];
+		_dst[1] = _src[1];
+		_dst[2] = _src[2];
+		_dst[3] = _src[4];
+		_dst[4] = _src[5];
+		_dst[5] = _src[6];
+		_dst[6] = _src[8];
+		_dst[7] = _src[9];
+		_dst[8] = _src[10];
 	}
 
 	template<typename Ty>

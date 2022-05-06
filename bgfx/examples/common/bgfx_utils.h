@@ -90,7 +90,7 @@ struct MeshState
 		uint8_t             m_stage;
 	};
 
-	Texture             m_textures[6];
+	Texture             m_textures[8];
 	uint64_t            m_state;
 	bgfx::ProgramHandle m_program;
 	uint8_t             m_numTextures;

@@ -130,6 +130,8 @@ namespace bx
 		///
 		constexpr Quaternion(float _x, float _y, float _z, float _w);
 
+		Vec3 getVec3();
+
 		float x, y, z, w;
 	};
 
@@ -709,6 +711,8 @@ namespace bx
 	///
 	void mtxTranspose(float* _result, const float* _a);
 
+	void mtx3TransposeInPlace(float* _a);
+
 	///
 	void mtx3Inverse(float* _result, const float* _a);
 
@@ -757,6 +761,7 @@ namespace bx
 	//my own function below, dedicate to my beloved MATLAB
 	void ones4(float* _a);
 	void eye4(float* _a);
+	void mtx4toMtx3(float* _dst, const float* _src);
 
 	template<typename Ty>
 	void zeros4(Ty* _a);

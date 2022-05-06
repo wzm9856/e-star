@@ -6,11 +6,11 @@
 #include <bx/uint32_t.h>
 #include "common.h"
 #include "bgfx_utils.h"
-#include "bgfx_logo.h"
 #include "imgui/imgui.h"
 #include <string>
 #include "../bgfx/examples/common/entry/input.h"
-
+#include <iostream>
+typedef bx::Quaternion Vec4;
 namespace
 {
 
@@ -182,6 +182,12 @@ void VBOSubmit(const MeshState* _state, const float* _transform, bgfx::VertexBuf
 	bgfx::submit(_state->m_viewId, _state->m_program, 0, BGFX_DISCARD_INDEX_BUFFER | BGFX_DISCARD_VERTEX_STREAMS);
 	bgfx::discard(BGFX_DISCARD_BINDINGS | BGFX_DISCARD_STATE | BGFX_DISCARD_TRANSFORM);
 }
+
+static const char* s_levelName[]{
+	"pbr",
+	"bling-phong",
+};
+
 class EStarHomework : public entry::AppI
 {
 public:
@@ -192,6 +198,7 @@ public:
 		m_height = 0;
 		m_debug = BGFX_DEBUG_NONE;
 		m_reset = BGFX_RESET_NONE;
+		m_pt = 0;
 	}
 
 	void init(int32_t _argc, const char* const* _argv, uint32_t _width, uint32_t _height) override
@@ -225,12 +232,18 @@ public:
 		bgfx::setViewClear(3, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH);
 
 		// Create program from shaders.
-		m_program = myloadProgram("../shaders/ibl/", "vs", "fs_pbr");
+		m_pbrProgram = myloadProgram("../shaders/ibl/", "vs_pbr", "fs_pbr");
+		m_pbrShadowProgram = myloadProgram("../shaders/ibl/", "vs_pbr", "fs_pbr_shadowMap");
+		m_blpProgram = myloadProgram("../shaders/bling-phong/", "vs", "fs_bling-phong");
+		m_blpShadowProgram = myloadProgram("../shaders/bling-phong/", "vs", "fs_bling-phong_shadowMap");
 		m_skyboxProgram = myloadProgram("../shaders/ibl/", "vs_skybox", "fs_skybox");
 		m_groundProgram = myloadProgram("../shaders/shadowMap/ground/", "vs_ground", "fs_ground");
 		m_shadowProgram = myloadProgram("../shaders/shadowMap/shadow/", "vs_shadow", "fs_shadow");
 		m_testProgram	= myloadProgram("../shaders/shadowMap/test/", "vs_test", "fs_test");
-		BX_ASSERT(bgfx::isValid(m_program), "m_program is not valid");
+		BX_ASSERT(bgfx::isValid(m_pbrProgram), "m_pbrProgram is not valid");
+		BX_ASSERT(bgfx::isValid(m_blpProgram), "m_blpProgram is not valid");
+		BX_ASSERT(bgfx::isValid(m_pbrShadowProgram), "m_pbrShadowProgram is not valid");
+		BX_ASSERT(bgfx::isValid(m_blpShadowProgram), "m_blpShadowProgram is not valid");
 		BX_ASSERT(bgfx::isValid(m_skyboxProgram), "m_skyboxProgram is not valid");
 		BX_ASSERT(bgfx::isValid(m_groundProgram), "m_groundProgram is not valid");
 		BX_ASSERT(bgfx::isValid(m_shadowProgram), "m_shadowProgram is not valid");
@@ -243,9 +256,10 @@ public:
 		bx::mtxIdentity(m_model);
 		bx::mtxIdentity(m_preModel);
 		bx::mtxIdentity(m_identity);
+		bx::mtx4toMtx3(m_normalMtx, m_identity);
 		m_groundScale[0] = 30;
 		m_groundScale[5] = 1;
-		m_groundScale[13] = -1;
+		m_groundScale[13] = 0;//平面和石头的距离
 		m_groundScale[10] = 30;
 		m_groundScale[15] = 1;
 
@@ -261,12 +275,16 @@ public:
 		m_textureAORM	= loadTexture("../resource/pbr_stone/pbr_stone_aorm.tga");
 		m_textureSkyLod	= loadTexture("../resource/env_maps/kyoto_lod.dds");
 		m_textureSkyIrr	= loadTexture("../resource/env_maps/kyoto_irr.dds");
+		m_textureBlackLod=loadTexture("../resource/env_maps/black_lod.dds");
+		m_textureBlackIrr=loadTexture("../resource/env_maps/black_irr.dds");
 		m_textureBrdfLut= loadTexture("../resource/pbr_stone/brdflut.dds");
 		BX_ASSERT(bgfx::isValid(m_textureColor), "m_textureColor is not valid");
 		BX_ASSERT(bgfx::isValid(m_textureNormal), "m_textureNormal is not valid");
 		BX_ASSERT(bgfx::isValid(m_textureAORM), "m_textureAORM is not valid");
 		BX_ASSERT(bgfx::isValid(m_textureSkyLod), "m_textureSkyLod is not valid");
 		BX_ASSERT(bgfx::isValid(m_textureSkyIrr), "m_textureSkyIrr is not valid");
+		BX_ASSERT(bgfx::isValid(m_textureBlackLod), "m_textureBlackLod is not valid");
+		BX_ASSERT(bgfx::isValid(m_textureBlackIrr), "m_textureBlackIrr is not valid");
 		BX_ASSERT(bgfx::isValid(m_textureBrdfLut), "m_textureBrdfLut is not valid");
 		m_shadowMap	= bgfx::createTexture2D(512, 512, false, 1, bgfx::TextureFormat::D16, BGFX_TEXTURE_RT | BGFX_SAMPLER_COMPARE_LEQUAL);
 		m_shadowMapInRGB = bgfx::createTexture2D(512, 512, false, 1, bgfx::TextureFormat::RGBA8, BGFX_TEXTURE_RT);
@@ -278,7 +296,9 @@ public:
 		u_lightRGB =	bgfx::createUniform("u_lightRGB", bgfx::UniformType::Vec4);
 		u_lightMtx =	bgfx::createUniform("u_lightMtx", bgfx::UniformType::Mat4);
 		u_eyePos =		bgfx::createUniform("u_eyePos", bgfx::UniformType::Vec4);
-		m_mesh =		meshLoad("../resource/pbr_stone/pbr_stone_mes.bin");
+		u_normalMtx =	bgfx::createUniform("u_normalMtx", bgfx::UniformType::Mat3);
+		m_mesh =		meshLoad("../resource/pbr_stone/pbr_stone.bin");
+		//m_mesh =		meshLoad("../resource/pbr_stone/pbr_stone_mes.bin");
 
 		m_skyboxVBO = bgfx::createVertexBuffer(bgfx::makeRef(s_skyboxVertices, sizeof(s_skyboxVertices)), SkyboxVertex::ms_layout);
 		m_skyboxIBO = bgfx::createIndexBuffer(bgfx::makeRef(s_skyboxTriList, sizeof(s_skyboxTriList)));
@@ -307,10 +327,10 @@ public:
 
 		// state2->view2 渲染石头
 		m_state[2] = meshStateCreate();
-		m_state[2]->m_state = BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_LESS;
-		m_state[2]->m_program = m_program;
+		m_state[2]->m_state = BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_LESS | BGFX_STATE_CULL_CCW;
+		m_state[2]->m_program = m_pbrProgram;
 		m_state[2]->m_viewId = 2;
-		m_state[2]->m_numTextures = 6;
+		m_state[2]->m_numTextures = 7;
 		for (int i = 0; i < m_state[2]->m_numTextures; i++) {
 			m_state[2]->m_textures[i].m_flags = UINT32_MAX;
 			m_state[2]->m_textures[i].m_stage = i+1;
@@ -327,8 +347,8 @@ public:
 		m_state[2]->m_textures[4].m_texture = m_textureSkyIrr;
 		m_state[2]->m_textures[5].m_sampler = s_shadowMap;
 		m_state[2]->m_textures[5].m_texture = m_shadowMap;
-		//m_state[2]->m_textures[5].m_sampler = s_texNormal;
-		//m_state[2]->m_textures[5].m_texture = m_textureNormal;
+		m_state[2]->m_textures[6].m_sampler = s_texNormal;
+		m_state[2]->m_textures[6].m_texture = m_textureNormal;
 
 		// state3->view2 渲染地面
 		m_state[3] = meshStateCreate();
@@ -357,7 +377,10 @@ public:
 	{
 		imguiDestroy();
 
-		bgfx::destroy(m_program);
+		bgfx::destroy(m_pbrProgram);
+		bgfx::destroy(m_pbrShadowProgram);
+		bgfx::destroy(m_blpProgram);
+		bgfx::destroy(m_blpShadowProgram);
 		bgfx::destroy(m_skyboxProgram);
 		bgfx::destroy(m_groundProgram);
 		bgfx::destroy(m_shadowProgram);
@@ -368,6 +391,8 @@ public:
 		bgfx::destroy(m_textureAORM);
 		bgfx::destroy(m_textureSkyLod);
 		bgfx::destroy(m_textureSkyIrr);
+		bgfx::destroy(m_textureBlackLod);
+		bgfx::destroy(m_textureBlackIrr);
 		bgfx::destroy(m_textureBrdfLut);
 		bgfx::destroy(m_shadowMap);
 		bgfx::destroy(m_shadowMapInRGB);
@@ -378,6 +403,7 @@ public:
 		bgfx::destroy(s_texSkyIrr);
 		bgfx::destroy(s_texBrdfLut);
 		bgfx::destroy(s_shadowMap);
+		bgfx::destroy(u_normalMtx);
 		bgfx::destroy(u_lightPos);
 		bgfx::destroy(u_lightRGB);
 		bgfx::destroy(u_lightMtx);
@@ -420,21 +446,17 @@ public:
 					ImVec2(m_width / 5.0f, m_height / 3.5f)
 					, ImGuiCond_FirstUseEver
 				);
-				ImGui::Begin("Info", NULL, 0);
+				ImGui::Begin("Options", NULL, 0);
+				ImGui::Combo("##着色模型", &m_pt, s_levelName, BX_COUNTOF(s_levelName));
+				ImGui::Checkbox("shadowmap?", &m_shadowOn);
+				ImGui::Checkbox("lights on?", &m_lightsOn);
+				ImGui::Checkbox("ibl?", &m_iblOn);
 
-				std::string s = std::to_string(m_mouseState.m_mx) + " " + std::to_string(m_mouseState.m_my) + " " +
-					std::to_string(m_mouseState.m_mz) + " " + std::to_string(m_mouseState.m_buttons[0]) + " " +
-					std::to_string(m_mouseState.m_buttons[1]) + " " + std::to_string(m_mouseState.m_buttons[2]) + " " +
-					std::to_string(m_mouseState.m_buttons[3]);
-				ImGui::Text(s.c_str());
-
-				s = std::to_string(m_at.x) + " " + std::to_string(m_at.y) + " " + std::to_string(m_at.z);
-				ImGui::Text(s.c_str());
-				s = std::to_string(m_fov);
-				ImGui::Text(s.c_str());
-				//const bgfx::Caps* caps = bgfx::getCaps();
-				//s = std::to_string(caps->supported & BGFX_CAPS_TEXTURE_COMPARE_LEQUAL);
-				//ImGui::Text(s.c_str());
+				if (m_pt == 1 && m_iblOn) {
+					ImGui::Text("IBL using bling-phong is not");
+					ImGui::Text("implemented, please use PBR instead.");
+				}
+					
 				ImGui::End();
 				imguiEndFrame();
 			}
@@ -493,40 +515,77 @@ public:
 			bgfx::setViewRect(3, 0, uint16_t(m_height / 3*2), uint16_t(m_width/3), uint16_t(m_height/3)); // view3渲染深度图
 			bgfx::setViewFrameBuffer(0, m_shadowMapFBO);
 
-			//生成光源VP矩阵
+			// 生成光源VP矩阵
 			{
-				bx::mtxLookAt(m_lightView, m_lighteye, m_lightat);
-				bx::mtxProj(m_lightProj, 90.0f, 1.0f, 10.0f, 50.0f, bgfx::getCaps()->homogeneousDepth);
-				bgfx::setViewTransform(m_state[0]->m_viewId, m_lightView, m_lightProj);
+				bx::mtxLookAt(m_lightView, m_lighteye.getVec3(), m_lightat.getVec3());
+				bx::mtxProj(m_lightProj, 70.0f, 1.0f, 10.0f, 50.0f, bgfx::getCaps()->homogeneousDepth);
+				bx::mtxMul(m_lightMtx, m_lightView, m_lightProj);
 			}
-			meshSubmit(m_mesh, &m_state[0], 1, m_model);
-			bgfx::setViewTransform(m_state[0]->m_viewId, m_lightView, m_lightProj);
-			VBOSubmit(m_state[0], m_groundModel, m_groundVBO);
 
-			//绘制shadowmap示意图
-			VBOSubmit(m_state[4], m_identity, m_testVBO);
-
-			//生成相机VP矩阵
+			// 生成相机VP矩阵
 			{
-				bx::mtxLookAt(m_view, m_eye, m_at);
+				bx::mtxLookAt(m_view, m_eye.getVec3(), m_at.getVec3());
 				bx::mtxProj(m_proj, m_fov, float(m_width) / float(m_height), 0.1f, 2000.0f, bgfx::getCaps()->homogeneousDepth);
 				bgfx::setViewTransform(m_state[2]->m_viewId, m_view, m_proj);
-				float lightIntensity = 100;
-				float lightPos[4] = { m_lighteye.x, m_lighteye.y, m_lighteye.z, 0.0 };
-				float lightRGB[4] = { lightIntensity * 1, lightIntensity * 1, lightIntensity * 1, 0.0 };
-				float eyePos[4] = { m_eye.x, m_eye.y, m_eye.z, 0.0 };
-				bgfx::setUniform(u_lightPos, lightPos);
-				bgfx::setUniform(u_lightRGB, lightRGB);
-				bgfx::setUniform(u_eyePos, eyePos);
+				bgfx::setUniform(u_lightPos, &m_lighteye);
+				bgfx::setUniform(u_lightRGB, &m_lightrgb);
+				bgfx::setUniform(u_eyePos, &m_eye);
 			}
 
-			meshSubmit(m_mesh, &m_state[2], 1, m_model);
-				
-			bgfx::setViewTransform(2, m_view, m_proj);
-			VBOSubmit(m_state[3], m_groundModel, m_groundVBO);
-			
+			// 绘制深度图和地面
+			if (m_shadowOn) {
+				bgfx::setViewTransform(m_state[0]->m_viewId, m_lightView, m_lightProj);
+				meshSubmit(m_mesh, &m_state[0], 1, m_model);
+				VBOSubmit(m_state[0], m_groundModel, m_groundVBO);
+
+				// 绘制shadowmap示意图
+				VBOSubmit(m_state[4], m_identity, m_testVBO);
+
+				bgfx::setViewTransform(2, m_view, m_proj);
+				bgfx::setUniform(u_lightMtx, m_lightMtx);
+				VBOSubmit(m_state[3], m_groundModel, m_groundVBO);
+			}
+
+
+			// 生成normalMtx，对于某一帧，其各处的normalMtx都一样，一次计算多次满足
+			bx::mtx4toMtx3(m_normalMtx, m_model);
+			bx::mtx3Inverse(m_normalMtx, m_normalMtx);
+			bx::mtx3TransposeInPlace(m_normalMtx);
+
+			if (m_iblOn) {
+				m_state[1]->m_textures[0].m_texture = m_textureSkyLod;
+				m_state[2]->m_textures[3].m_texture = m_textureSkyLod;
+				m_state[2]->m_textures[4].m_texture = m_textureSkyIrr;
+			}
+			else {
+				m_state[1]->m_textures[0].m_texture = m_textureBlackLod;
+				m_state[2]->m_textures[3].m_texture = m_textureBlackLod;
+				m_state[2]->m_textures[4].m_texture = m_textureBlackIrr;
+			}
+
+			bgfx::setUniform(u_normalMtx, m_normalMtx);
 			bgfx::setViewTransform(m_state[1]->m_viewId, m_identity, m_proj);
 			VBOSubmit(m_state[1], m_model, m_skyboxVBO, m_skyboxIBO);// 理论上此处model是需要去掉平移量，但是本来model也没平移，只是纯旋转
+
+			if (m_pt == 1) {
+				m_lightrgb = { 1000 * (float)m_lightsOn,1000 * (float)m_lightsOn,1000 * (float)m_lightsOn,0};
+				if (m_shadowOn) {
+					bgfx::setUniform(u_lightMtx, m_lightMtx);
+					m_state[2]->m_program = m_blpShadowProgram;
+				}
+				else
+					m_state[2]->m_program = m_blpProgram;
+			}
+			else if (m_pt == 0) {
+				m_lightrgb = { 3000 * (float)m_lightsOn,3000 * (float)m_lightsOn,3000 * (float)m_lightsOn,0 };
+				if (m_shadowOn) {
+					bgfx::setUniform(u_lightMtx, m_lightMtx);
+					m_state[2]->m_program = m_pbrShadowProgram;
+				}
+				else
+					m_state[2]->m_program = m_pbrProgram;
+			}
+			meshSubmit(m_mesh, &m_state[2], 1, m_model);
 
 			bgfx::frame();
 			return true;
@@ -541,7 +600,10 @@ public:
 	uint32_t m_debug;
 	uint32_t m_reset;
 	int64_t m_timeOffset;
-	int32_t m_pt = 0;
+	int m_pt = 1;
+	bool m_shadowOn = true;
+	bool m_lightsOn = true;
+	bool m_iblOn = true;
 
 	bgfx::UniformHandle s_texColor;
 	bgfx::UniformHandle s_texNormal;
@@ -554,7 +616,11 @@ public:
 	bgfx::UniformHandle u_lightRGB;
 	bgfx::UniformHandle u_lightMtx;
 	bgfx::UniformHandle u_eyePos;
-	bgfx::ProgramHandle m_program;
+	bgfx::UniformHandle u_normalMtx;
+	bgfx::ProgramHandle m_pbrProgram;
+	bgfx::ProgramHandle m_pbrShadowProgram;
+	bgfx::ProgramHandle m_blpProgram;
+	bgfx::ProgramHandle m_blpShadowProgram;
 	bgfx::ProgramHandle m_skyboxProgram;
 	bgfx::ProgramHandle m_groundProgram;
 	bgfx::ProgramHandle m_shadowProgram;
@@ -564,6 +630,8 @@ public:
 	bgfx::TextureHandle m_textureAORM;
 	bgfx::TextureHandle m_textureSkyLod;
 	bgfx::TextureHandle m_textureSkyIrr;
+	bgfx::TextureHandle m_textureBlackLod;
+	bgfx::TextureHandle m_textureBlackIrr;
 	bgfx::TextureHandle m_textureBrdfLut;
 	bgfx::TextureHandle m_shadowMap;
 	bgfx::TextureHandle m_shadowMapInRGB;
@@ -594,10 +662,13 @@ public:
 	float	m_groundModel[16] = { 0 };
 	float	m_lightView[16] = { 0 };
 	float	m_lightProj[16] = { 0 };
-	bx::Vec3 m_at = { 0.0f, 0.0f, 0.0f }; //at是视点，eye是相机坐标
-	bx::Vec3 m_eye = { 0.0f, 0.0f, -20.0f };
-	bx::Vec3 m_lightat = { 0.0f, 0.0f, 0.0f }; //at是视点，eye是光源坐标
-	bx::Vec3 m_lighteye = { -20.0f, -20.0f, -20.0f };
+	float	m_lightMtx[16] = { 0 };	
+	float	m_normalMtx[9] = { 0 };
+	Vec4 m_at = { 0.0f, 0.0f, 0.0f, 0.0f }; //at是视点，eye是相机坐标
+	Vec4 m_eye = { 0.0f, 0.0f, -20.0f, 0.0f };
+	Vec4 m_lightat = { 0.0f, 0.0f, 0.0f, 0.0f }; //at是视点，eye是光源坐标
+	Vec4 m_lighteye = { -20.0f, -20.0f, -20.0f, 0.0f };
+	Vec4 m_lightrgb = { 1000,1000,1000,0 };
 	Mesh*	m_mesh;
 };
 

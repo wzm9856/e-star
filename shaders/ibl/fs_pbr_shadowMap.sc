@@ -10,6 +10,7 @@ SAMPLERCUBE(s_texSkyLod, 0);
 SAMPLERCUBE(s_texSkyIrr, 1);
 SAMPLER2DSHADOW(s_shadowMap, 0);
 uniform vec4 u_lightRGB;
+uniform mat4 u_lightMtx;
 
 #define PI 3.14159265359
 
@@ -90,11 +91,33 @@ void main(){
 	vec2 brdf = texture2D(s_texBrdfLut, vec2(max(NdV, 0), 1.0-rough)).xy; //这个的uv坐标又是正确的右u上v了
 	vec3 envSpecular = envSpecularColor * (F * brdf.x + brdf.y);
 	
+	float bias = NdL>0.0 ? 0.03*(1.1-NdL) : 0.005;
+	vec4 shadowCoord = mul(u_lightMtx, vec4(v_wpos, 1.0));
+	vec3 shadowCoordNDC = shadowCoord.xyz / shadowCoord.w;
+	shadowCoordNDC = shadowCoordNDC*0.5+0.5;
+	
+	float t = 1.0 / 512.0; //t->texelSize
+	vec4 lightIntensity = vec4(0.0);
+	lightIntensity += vec4(shadow2D(s_shadowMap, vec3(shadowCoordNDC.xy+vec2(-t,-t), shadowCoordNDC.z-bias)));
+	lightIntensity += vec4(shadow2D(s_shadowMap, vec3(shadowCoordNDC.xy+vec2( 0,-t), shadowCoordNDC.z-bias)));
+	lightIntensity += vec4(shadow2D(s_shadowMap, vec3(shadowCoordNDC.xy+vec2( t,-t), shadowCoordNDC.z-bias)));
+	lightIntensity += vec4(shadow2D(s_shadowMap, vec3(shadowCoordNDC.xy+vec2(-t, t), shadowCoordNDC.z-bias)));
+	lightIntensity += vec4(shadow2D(s_shadowMap, vec3(shadowCoordNDC.xy+vec2( 0, t), shadowCoordNDC.z-bias)));
+	lightIntensity += vec4(shadow2D(s_shadowMap, vec3(shadowCoordNDC.xy+vec2( t, t), shadowCoordNDC.z-bias)));
+	lightIntensity += vec4(shadow2D(s_shadowMap, vec3(shadowCoordNDC.xy+vec2(-t, 0), shadowCoordNDC.z-bias)));
+	lightIntensity += vec4(shadow2D(s_shadowMap, vec3(shadowCoordNDC.xy+vec2( 0, 0), shadowCoordNDC.z-bias)));
+	lightIntensity += vec4(shadow2D(s_shadowMap, vec3(shadowCoordNDC.xy+vec2( t, 0), shadowCoordNDC.z-bias)));
+	lightIntensity /= 9.0;
+	
+	float squareDistance = dot(shadowCoordNDC.xy*2.0-1.0, shadowCoordNDC.xy*2.0-1.0);
+	lightIntensity.x *= squareDistance>0.05 ? 1.1 - squareDistance*2.0 : 1.0; // 聚光灯效果
+	lightIntensity.x = max(lightIntensity.x, 0.0);
+	
 	vec3 directColor = (kD * albedo / PI + specular) * u_lightRGB.xyz / r2 * max(dot(normal, lightdir), 0);
 	vec3 envColor = albedo * irradiance + envSpecular;
-	//gl_FragColor = vec4(vec3(4.0 * max(NdV, 0.0) * max(NdL, 0.0)), 0);
+	gl_FragColor = vec4(directColor * lightIntensity.x + envColor * ao, 0);
+	//gl_FragColor = vec4(vec3(lightIntensity.x), 0);
 	//gl_FragColor = vec4(directColor,0);
-	gl_FragColor = vec4(directColor + envColor * ao, 0);
 	//gl_FragColor = vec4(1,1,1,0);
 	gl_FragColor = toGamma(gl_FragColor);
 }

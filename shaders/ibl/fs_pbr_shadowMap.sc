@@ -2,13 +2,13 @@ $input v_wpos, v_viewdir, v_lightdir, v_tangent, v_normal, v_originNormal, v_tex
 
 #include "../common/common.sh"
 
-SAMPLER2D(s_texColor,  0);
-SAMPLER2D(s_texNormal, 1);
-SAMPLER2D(s_texAORM, 2);
-SAMPLER2D(s_texBrdfLut, 3);
+SAMPLER2D(s_texColor,  1);
+SAMPLER2D(s_texNormal, 2);
+SAMPLER2DSHADOW(s_shadowMap, 3);
 SAMPLERCUBE(s_texSkyLod, 4);
 SAMPLERCUBE(s_texSkyIrr, 5);
-SAMPLER2DSHADOW(s_shadowMap, 6);
+SAMPLER2D(s_texBrdfLut, 6);
+SAMPLER2D(s_texAORM, 7);
 uniform vec4 u_lightRGB;
 uniform mat4 u_lightMtx;
 

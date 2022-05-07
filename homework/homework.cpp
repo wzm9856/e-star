@@ -535,7 +535,7 @@ public:
 				bgfx::setUniform(u_lightRGB, &m_lightrgb);
 				bgfx::setUniform(u_eyePos, &m_eye);
 			}
-
+			
 			// 绘制深度图和地面
 			if (m_shadowOn) {
 				bgfx::setViewTransform(m_state[0]->m_viewId, m_lightView, m_lightProj);

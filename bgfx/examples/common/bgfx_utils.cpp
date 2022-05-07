@@ -132,12 +132,14 @@ static bgfx::ShaderHandle loadShader(bx::FileReaderI* _reader, const char* _name
 	return handle;
 }
 
-bgfx::ShaderHandle myloadShader(const char* _filePath, const char* _name, bx::FileReaderI* _reader)
+bgfx::ShaderHandle myloadShader(const char* _filePath, const char* _name, bgfx::RendererType::Enum _type, bx::FileReaderI* _reader)
 {
 	char filePath[512];
 
 	bx::strCopy(filePath, BX_COUNTOF(filePath), _filePath);
 	bx::strCat(filePath, BX_COUNTOF(filePath), _name);
+	if(_type == bgfx::RendererType::Direct3D11)
+		bx::strCat(filePath, BX_COUNTOF(filePath), "_hlsl");
 	bx::strCat(filePath, BX_COUNTOF(filePath), ".bin");
 
 	bgfx::ShaderHandle handle = bgfx::createShader(loadMem(_reader, filePath));
@@ -168,14 +170,14 @@ bgfx::ProgramHandle loadProgram(const char* _vsName, const char* _fsName)
 	return loadProgram(entry::getFileReader(), _vsName, _fsName);
 }
 
-bgfx::ProgramHandle myloadProgram(const char* _dir, const char* _vsName, const char* _fsName, bx::FileReaderI* _reader)
+bgfx::ProgramHandle myloadProgram(const char* _dir, const char* _vsName, const char* _fsName, bgfx::RendererType::Enum _type, bx::FileReaderI* _reader)
 {
 
-	bgfx::ShaderHandle vsh = myloadShader(_dir, _vsName, _reader);
+	bgfx::ShaderHandle vsh = myloadShader(_dir, _vsName, _type, _reader);
 	bgfx::ShaderHandle fsh = BGFX_INVALID_HANDLE;
 	if (NULL != _fsName)
 	{
-		fsh = myloadShader(_dir, _fsName, _reader);
+		fsh = myloadShader(_dir, _fsName, _type, _reader);
 	}
 
 	return bgfx::createProgram(vsh, fsh, true /* destroy shaders when program is destroyed */);

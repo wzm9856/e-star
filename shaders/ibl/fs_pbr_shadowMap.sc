@@ -6,9 +6,9 @@ SAMPLER2D(s_texColor,  0);
 SAMPLER2D(s_texNormal, 1);
 SAMPLER2D(s_texAORM, 2);
 SAMPLER2D(s_texBrdfLut, 3);
-SAMPLERCUBE(s_texSkyLod, 0);
-SAMPLERCUBE(s_texSkyIrr, 1);
-SAMPLER2DSHADOW(s_shadowMap, 0);
+SAMPLERCUBE(s_texSkyLod, 4);
+SAMPLERCUBE(s_texSkyIrr, 5);
+SAMPLER2DSHADOW(s_shadowMap, 6);
 uniform vec4 u_lightRGB;
 uniform mat4 u_lightMtx;
 
@@ -65,7 +65,7 @@ void main(){
 	vec3 bitangent = cross(tangent, normal);
 	mat3 TBN = mat3(tangent, bitangent, normal);
 	vec3 normalTex = texture2D(s_texNormal, v_texcoord0).xyz;
-	normal = normalize(TBN * normalTex);
+	normal = normalize(mul(TBN, normalTex));
 	float NdV = dot(normal, viewdir);
 	float NdL = dot(normal, lightdir);
 	vec3 reflectdir	= normalize(reflect(-viewdir, normal));
@@ -76,13 +76,13 @@ void main(){
 	float rough 	= aorm.y-0.002;
 	float matallic 	= aorm.z;
 	
-	vec3 F0	= mix(vec3(0.04), albedo, matallic); //金属的反射光有颜色，非金属就是白的
+	vec3 F0	= mix(vec3_splat(0.04), albedo, matallic); //金属的反射光有颜色，非金属就是白的
 	vec3 F  = fresnelSchlick(max(dot(half_vec, viewdir), 0.0), F0);
 	float D = DistributionGGX(normal, half_vec, rough);
 	float G = GeometrySmith(normal, viewdir, lightdir, rough);
 	vec3 specular = D * G * F / (4.0 * max(NdV, 0.0) * max(NdL, 0.0) + 0.001); 
 	
-	vec3 kD = (vec3(1.0) - F) * (1.0 - matallic);
+	vec3 kD = (vec3_splat(1.0) - F) * (1.0 - matallic);
 	
 	vec3 irradiance = textureCube(s_texSkyIrr,v_originNormal).xyz;
 	const float MAXLOD = 6.0;
@@ -97,16 +97,16 @@ void main(){
 	shadowCoordNDC = shadowCoordNDC*0.5+0.5;
 	
 	float t = 1.0 / 512.0; //t->texelSize
-	vec4 lightIntensity = vec4(0.0);
-	lightIntensity += vec4(shadow2D(s_shadowMap, vec3(shadowCoordNDC.xy+vec2(-t,-t), shadowCoordNDC.z-bias)));
-	lightIntensity += vec4(shadow2D(s_shadowMap, vec3(shadowCoordNDC.xy+vec2( 0,-t), shadowCoordNDC.z-bias)));
-	lightIntensity += vec4(shadow2D(s_shadowMap, vec3(shadowCoordNDC.xy+vec2( t,-t), shadowCoordNDC.z-bias)));
-	lightIntensity += vec4(shadow2D(s_shadowMap, vec3(shadowCoordNDC.xy+vec2(-t, t), shadowCoordNDC.z-bias)));
-	lightIntensity += vec4(shadow2D(s_shadowMap, vec3(shadowCoordNDC.xy+vec2( 0, t), shadowCoordNDC.z-bias)));
-	lightIntensity += vec4(shadow2D(s_shadowMap, vec3(shadowCoordNDC.xy+vec2( t, t), shadowCoordNDC.z-bias)));
-	lightIntensity += vec4(shadow2D(s_shadowMap, vec3(shadowCoordNDC.xy+vec2(-t, 0), shadowCoordNDC.z-bias)));
-	lightIntensity += vec4(shadow2D(s_shadowMap, vec3(shadowCoordNDC.xy+vec2( 0, 0), shadowCoordNDC.z-bias)));
-	lightIntensity += vec4(shadow2D(s_shadowMap, vec3(shadowCoordNDC.xy+vec2( t, 0), shadowCoordNDC.z-bias)));
+	vec4 lightIntensity = vec4_splat(0.0);
+	lightIntensity += vec4_splat(shadow2D(s_shadowMap, vec3(shadowCoordNDC.xy+vec2(-t,-t), shadowCoordNDC.z-bias)));
+	lightIntensity += vec4_splat(shadow2D(s_shadowMap, vec3(shadowCoordNDC.xy+vec2( 0,-t), shadowCoordNDC.z-bias)));
+	lightIntensity += vec4_splat(shadow2D(s_shadowMap, vec3(shadowCoordNDC.xy+vec2( t,-t), shadowCoordNDC.z-bias)));
+	lightIntensity += vec4_splat(shadow2D(s_shadowMap, vec3(shadowCoordNDC.xy+vec2(-t, t), shadowCoordNDC.z-bias)));
+	lightIntensity += vec4_splat(shadow2D(s_shadowMap, vec3(shadowCoordNDC.xy+vec2( 0, t), shadowCoordNDC.z-bias)));
+	lightIntensity += vec4_splat(shadow2D(s_shadowMap, vec3(shadowCoordNDC.xy+vec2( t, t), shadowCoordNDC.z-bias)));
+	lightIntensity += vec4_splat(shadow2D(s_shadowMap, vec3(shadowCoordNDC.xy+vec2(-t, 0), shadowCoordNDC.z-bias)));
+	lightIntensity += vec4_splat(shadow2D(s_shadowMap, vec3(shadowCoordNDC.xy+vec2( 0, 0), shadowCoordNDC.z-bias)));
+	lightIntensity += vec4_splat(shadow2D(s_shadowMap, vec3(shadowCoordNDC.xy+vec2( t, 0), shadowCoordNDC.z-bias)));
 	lightIntensity /= 9.0;
 	
 	float squareDistance = dot(shadowCoordNDC.xy*2.0-1.0, shadowCoordNDC.xy*2.0-1.0);
@@ -116,7 +116,7 @@ void main(){
 	vec3 directColor = (kD * albedo / PI + specular) * u_lightRGB.xyz / r2 * max(dot(normal, lightdir), 0);
 	vec3 envColor = albedo * irradiance + envSpecular;
 	gl_FragColor = vec4(directColor * lightIntensity.x + envColor * ao, 0);
-	//gl_FragColor = vec4(vec3(lightIntensity.x), 0);
+	//gl_FragColor = vec4(vec3_splat(lightIntensity.x), 0);
 	//gl_FragColor = vec4(directColor,0);
 	//gl_FragColor = vec4(1,1,1,0);
 	gl_FragColor = toGamma(gl_FragColor);

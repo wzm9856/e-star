@@ -7,7 +7,7 @@ SAMPLER2D(s_texNormal, 1);
 SAMPLER2D(s_texAORM, 2);
 uniform vec4 u_lightRGB;
 
-const float PI = 3.14159265359;
+#define PI 3.14159265359
 vec3 fresnelSchlick(float cosTheta, vec3 F0)
 {
     return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);

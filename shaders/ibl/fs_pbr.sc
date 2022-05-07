@@ -2,13 +2,13 @@ $input v_wpos, v_viewdir, v_lightdir, v_tangent, v_normal, v_originNormal, v_tex
 
 #include "../common/common.sh"
 
-SAMPLER2D(s_texColor,  0);
-SAMPLER2D(s_texNormal, 1);
-SAMPLER2D(s_texAORM, 2);
-SAMPLER2D(s_texBrdfLut, 3);
-SAMPLERCUBE(s_texSkyLod, 0);
-SAMPLERCUBE(s_texSkyIrr, 1);
-SAMPLER2DSHADOW(s_shadowMap, 0);
+SAMPLER2D(s_texColor, 1);
+SAMPLER2D(s_texNormal, 2);
+SAMPLER2DSHADOW(s_shadowMap, 3);
+SAMPLERCUBE(s_texSkyLod, 4);
+SAMPLERCUBE(s_texSkyIrr, 5);
+SAMPLER2D(s_texBrdfLut, 6);
+SAMPLER2D(s_texAORM, 7);
 uniform vec4 u_lightRGB;
 
 #define PI 3.14159265359
@@ -64,7 +64,7 @@ void main(){
 	vec3 bitangent = cross(tangent, normal);
 	mat3 TBN = mat3(tangent, bitangent, normal);
 	vec3 normalTex = texture2D(s_texNormal, v_texcoord0).xyz;
-	normal = normalize(TBN * normalTex);
+	normal = normalize(mul(TBN, normalTex));
 	float NdV = dot(normal, viewdir);
 	float NdL = dot(normal, lightdir);
 	vec3 reflectdir	= normalize(reflect(-viewdir, normal));
@@ -75,13 +75,13 @@ void main(){
 	float rough 	= aorm.y-0.002;
 	float matallic 	= aorm.z;
 	
-	vec3 F0	= mix(vec3(0.04), albedo, matallic); //金属的反射光有颜色，非金属就是白的
+	vec3 F0	= mix(vec3_splat(0.04), albedo, matallic); //金属的反射光有颜色，非金属就是白的
 	vec3 F  = fresnelSchlick(max(dot(half_vec, viewdir), 0.0), F0);
 	float D = DistributionGGX(normal, half_vec, rough);
 	float G = GeometrySmith(normal, viewdir, lightdir, rough);
 	vec3 specular = D * G * F / (4.0 * max(NdV, 0.0) * max(NdL, 0.0) + 0.001); 
 	
-	vec3 kD = (vec3(1.0) - F) * (1.0 - matallic);
+	vec3 kD = (vec3_splat(1.0) - F) * (1.0 - matallic);
 	
 	vec3 irradiance = textureCube(s_texSkyIrr,v_originNormal).xyz;
 	const float MAXLOD = 6.0;

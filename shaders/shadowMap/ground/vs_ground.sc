@@ -12,7 +12,13 @@ void main()
 	v_wpos = mul(u_model[0], vec4(a_position, 1.0)).xyz;
 	v_viewdir = u_eyePos.xyz - v_wpos;
 	v_lightdir = u_lightPos.xyz - v_wpos;
+	
+#if BGFX_SHADER_LANGUAGE_HLSL==500
+	v_normal = normalize(mul((mat3)u_model[0], a_normal));
+#endif
+#if BGFX_SHADER_LANGUAGE_GLSL==100
 	v_normal = normalize(mul(mat3(u_model[0]), a_normal));
+#endif
 	v_color0 = a_color0.xyz;
 	gl_Position = mul(u_viewProj, vec4(v_wpos, 1.0));
 }

@@ -198,7 +198,6 @@ public:
 		m_height = 0;
 		m_debug = BGFX_DEBUG_NONE;
 		m_reset = BGFX_RESET_NONE;
-		m_pt = 0;
 	}
 
 	void init(int32_t _argc, const char* const* _argv, uint32_t _width, uint32_t _height) override
@@ -211,13 +210,18 @@ public:
 		m_reset  = BGFX_RESET_VSYNC;
 
 		bgfx::Init init;
-		//init.type     = args.m_type;
+		//init.type = bgfx::RendererType::Direct3D11;
 		init.type = bgfx::RendererType::OpenGL;
-		init.vendorId = args.m_pciId;
+		//init.vendorId = args.m_pciId;
 		init.resolution.width  = m_width;
 		init.resolution.height = m_height;
 		init.resolution.reset  = m_reset;
 		bgfx::init(init);
+
+		if(init.type == bgfx::RendererType::OpenGL)
+			system("..\\shaders\\compileShaderGLSL.bat");
+		else if(init.type == bgfx::RendererType::Direct3D11)
+			system("..\\shaders\\compileShaderHLSL.bat");
 
 		// Enable debug text.
 		bgfx::setDebug(m_debug);
@@ -232,14 +236,14 @@ public:
 		bgfx::setViewClear(3, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH);
 
 		// Create program from shaders.
-		m_pbrProgram = myloadProgram("../shaders/ibl/", "vs_pbr", "fs_pbr");
-		m_pbrShadowProgram = myloadProgram("../shaders/ibl/", "vs_pbr", "fs_pbr_shadowMap");
-		m_blpProgram = myloadProgram("../shaders/bling-phong/", "vs", "fs_bling-phong");
-		m_blpShadowProgram = myloadProgram("../shaders/bling-phong/", "vs", "fs_bling-phong_shadowMap");
-		m_skyboxProgram = myloadProgram("../shaders/ibl/", "vs_skybox", "fs_skybox");
-		m_groundProgram = myloadProgram("../shaders/shadowMap/ground/", "vs_ground", "fs_ground");
-		m_shadowProgram = myloadProgram("../shaders/shadowMap/shadow/", "vs_shadow", "fs_shadow");
-		m_testProgram	= myloadProgram("../shaders/shadowMap/test/", "vs_test", "fs_test");
+		m_pbrProgram = myloadProgram("../shaders/ibl/", "vs_pbr", "fs_pbr", init.type);
+		m_pbrShadowProgram = myloadProgram("../shaders/ibl/", "vs_pbr", "fs_pbr_shadowMap", init.type);
+		m_blpProgram = myloadProgram("../shaders/bling-phong/", "vs", "fs_bling-phong", init.type);
+		m_blpShadowProgram = myloadProgram("../shaders/bling-phong/", "vs", "fs_bling-phong_shadowMap", init.type);
+		m_skyboxProgram = myloadProgram("../shaders/ibl/", "vs_skybox", "fs_skybox", init.type);
+		m_groundProgram = myloadProgram("../shaders/shadowMap/ground/", "vs_ground", "fs_ground", init.type);
+		m_shadowProgram = myloadProgram("../shaders/shadowMap/shadow/", "vs_shadow", "fs_shadow", init.type);
+		m_testProgram	= myloadProgram("../shaders/shadowMap/test/", "vs_test", "fs_test", init.type);
 		BX_ASSERT(bgfx::isValid(m_pbrProgram), "m_pbrProgram is not valid");
 		BX_ASSERT(bgfx::isValid(m_blpProgram), "m_blpProgram is not valid");
 		BX_ASSERT(bgfx::isValid(m_pbrShadowProgram), "m_pbrShadowProgram is not valid");
@@ -337,18 +341,18 @@ public:
 		}
 		m_state[2]->m_textures[0].m_sampler = s_texColor;
 		m_state[2]->m_textures[0].m_texture = m_textureColor;
-		m_state[2]->m_textures[1].m_sampler = s_texAORM;
-		m_state[2]->m_textures[1].m_texture = m_textureAORM;
-		m_state[2]->m_textures[2].m_sampler = s_texBrdfLut;
-		m_state[2]->m_textures[2].m_texture = m_textureBrdfLut;
+		m_state[2]->m_textures[1].m_sampler = s_texNormal;
+		m_state[2]->m_textures[1].m_texture = m_textureNormal;
+		m_state[2]->m_textures[2].m_sampler = s_shadowMap;
+		m_state[2]->m_textures[2].m_texture = m_shadowMap;
 		m_state[2]->m_textures[3].m_sampler = s_texSkyLod;
 		m_state[2]->m_textures[3].m_texture = m_textureSkyLod;
 		m_state[2]->m_textures[4].m_sampler = s_texSkyIrr;
 		m_state[2]->m_textures[4].m_texture = m_textureSkyIrr;
-		m_state[2]->m_textures[5].m_sampler = s_shadowMap;
-		m_state[2]->m_textures[5].m_texture = m_shadowMap;
-		m_state[2]->m_textures[6].m_sampler = s_texNormal;
-		m_state[2]->m_textures[6].m_texture = m_textureNormal;
+		m_state[2]->m_textures[5].m_sampler = s_texBrdfLut;
+		m_state[2]->m_textures[5].m_texture = m_textureBrdfLut;
+		m_state[2]->m_textures[6].m_sampler = s_texAORM;
+		m_state[2]->m_textures[6].m_texture = m_textureAORM;
 
 		// state3->view2 ‰÷»æµÿ√Ê
 		m_state[3] = meshStateCreate();
@@ -453,7 +457,7 @@ public:
 				ImGui::Checkbox("ibl?", &m_iblOn);
 
 				if (m_pt == 1 && m_iblOn) {
-					ImGui::Text("IBL using bling-phong is not");
+					ImGui::Text("IBL while using bling-phong is not");
 					ImGui::Text("implemented, please use PBR instead.");
 				}
 					
@@ -600,8 +604,8 @@ public:
 	uint32_t m_debug;
 	uint32_t m_reset;
 	int64_t m_timeOffset;
-	int m_pt = 1;
-	bool m_shadowOn = true;
+	int m_pt = 0;
+	bool m_shadowOn = false;
 	bool m_lightsOn = true;
 	bool m_iblOn = true;
 
@@ -676,7 +680,6 @@ public:
 
 int _main_(int _argc, char** _argv)
 {
-	system("..\\shaders\\compileShader.bat");
 	EStarHomework app("e-star-homework", "", "");
 	return entry::runApp(&app, _argc, _argv);
 }

@@ -2,11 +2,11 @@ $input v_wpos, v_viewdir, v_lightdir, v_tangent, v_normal, v_texcoord0
 
 #include "../common/common.sh"
 
-SAMPLER2D(s_texColor,  0);
-SAMPLER2D(s_texNormal, 1);
+SAMPLER2D(s_texColor,  1);
+SAMPLER2D(s_texNormal, 2);
 uniform vec4 u_lightRGB;
 uniform mat4 u_lightMtx;
-SAMPLER2DSHADOW(s_shadowMap, 0);
+SAMPLER2DSHADOW(s_shadowMap, 3);
 
 void main()
 {
@@ -16,9 +16,16 @@ void main()
 	vec3 viewdir 	= normalize(v_viewdir);
 	
 	vec3 bitangent = cross(tangent, normal);
-	mat3 TBN = mat3(tangent, bitangent, normal);
 	vec3 normalTex = texture2D(s_texNormal, v_texcoord0).xyz;
-	normal = normalize(TBN * normalTex);
+#if BGFX_SHADER_LANGUAGE_GLSL!=0
+	mat3 TBN = mat3(tangent, bitangent, normal);
+	normal = normalize(mul(TBN, normalTex));
+#endif
+#if BGFX_SHADER_LANGUAGE_HLSL!=0
+	mat3 TBN = mtxFromCols(tangent, bitangent, normal);
+	TBN = transpose(TBN);
+	normal = normalize(mul(normalTex, TBN));
+#endif
 	
 	vec3 color = toLinear(texture2D(s_texColor, v_texcoord0).xyz);
 	
@@ -37,16 +44,16 @@ void main()
 	shadowCoordNDC = shadowCoordNDC*0.5+0.5;
 	
 	float t = 1.0 / 512.0; //t->texelSize
-	vec4 lightIntensity = vec4(0.0);
-	lightIntensity += vec4(shadow2D(s_shadowMap, vec3(shadowCoordNDC.xy+vec2(-t,-t), shadowCoordNDC.z-bias)));
-	lightIntensity += vec4(shadow2D(s_shadowMap, vec3(shadowCoordNDC.xy+vec2( 0,-t), shadowCoordNDC.z-bias)));
-	lightIntensity += vec4(shadow2D(s_shadowMap, vec3(shadowCoordNDC.xy+vec2( t,-t), shadowCoordNDC.z-bias)));
-	lightIntensity += vec4(shadow2D(s_shadowMap, vec3(shadowCoordNDC.xy+vec2(-t, t), shadowCoordNDC.z-bias)));
-	lightIntensity += vec4(shadow2D(s_shadowMap, vec3(shadowCoordNDC.xy+vec2( 0, t), shadowCoordNDC.z-bias)));
-	lightIntensity += vec4(shadow2D(s_shadowMap, vec3(shadowCoordNDC.xy+vec2( t, t), shadowCoordNDC.z-bias)));
-	lightIntensity += vec4(shadow2D(s_shadowMap, vec3(shadowCoordNDC.xy+vec2(-t, 0), shadowCoordNDC.z-bias)));
-	lightIntensity += vec4(shadow2D(s_shadowMap, vec3(shadowCoordNDC.xy+vec2( 0, 0), shadowCoordNDC.z-bias)));
-	lightIntensity += vec4(shadow2D(s_shadowMap, vec3(shadowCoordNDC.xy+vec2( t, 0), shadowCoordNDC.z-bias)));
+	vec4 lightIntensity = vec4_splat(0.0);
+	lightIntensity += vec4_splat(shadow2D(s_shadowMap, vec3(shadowCoordNDC.xy+vec2(-t,-t), shadowCoordNDC.z-bias)));
+	lightIntensity += vec4_splat(shadow2D(s_shadowMap, vec3(shadowCoordNDC.xy+vec2( 0,-t), shadowCoordNDC.z-bias)));
+	lightIntensity += vec4_splat(shadow2D(s_shadowMap, vec3(shadowCoordNDC.xy+vec2( t,-t), shadowCoordNDC.z-bias)));
+	lightIntensity += vec4_splat(shadow2D(s_shadowMap, vec3(shadowCoordNDC.xy+vec2(-t, t), shadowCoordNDC.z-bias)));
+	lightIntensity += vec4_splat(shadow2D(s_shadowMap, vec3(shadowCoordNDC.xy+vec2( 0, t), shadowCoordNDC.z-bias)));
+	lightIntensity += vec4_splat(shadow2D(s_shadowMap, vec3(shadowCoordNDC.xy+vec2( t, t), shadowCoordNDC.z-bias)));
+	lightIntensity += vec4_splat(shadow2D(s_shadowMap, vec3(shadowCoordNDC.xy+vec2(-t, 0), shadowCoordNDC.z-bias)));
+	lightIntensity += vec4_splat(shadow2D(s_shadowMap, vec3(shadowCoordNDC.xy+vec2( 0, 0), shadowCoordNDC.z-bias)));
+	lightIntensity += vec4_splat(shadow2D(s_shadowMap, vec3(shadowCoordNDC.xy+vec2( t, 0), shadowCoordNDC.z-bias)));
 	lightIntensity /= 9.0;
 	
 	float squareDistance = dot(shadowCoordNDC.xy*2.0-1.0, shadowCoordNDC.xy*2.0-1.0);

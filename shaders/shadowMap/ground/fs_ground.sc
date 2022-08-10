@@ -6,12 +6,10 @@ uniform vec4 u_lightRGB;
 uniform mat4 u_lightMtx;
 SAMPLER2DSHADOW(s_shadowMap, 0);
 
+#define TEXCOUNT 1024.0
+
 void main()
 {
-
-#if BGFX_SHADER_LANGUAGE_HLSL!=0
-	u_lightMtx = transpose(u_lightMtx);
-#endif
 	vec3 normal_lightdir = normalize(v_lightdir);
 	vec3 normal_viewdir = normalize(v_viewdir);
 	float NdL = dot(v_normal,normal_lightdir);
@@ -32,11 +30,20 @@ void main()
 	
 	//float bias = 0.005;
 	float bias = NdL>0.0 ? 0.03*(1.1-NdL) : 0.005;
+#if BGFX_SHADER_LANGUAGE_HLSL!=0
+	u_lightMtx = transpose(u_lightMtx);
+	vec4 shadowCoord = mul(vec4(v_wpos, 1.0), u_lightMtx);
+	vec3 shadowCoordNDC = shadowCoord.xyz / shadowCoord.w;
+	shadowCoordNDC.xy = shadowCoordNDC.xy*0.5+0.5;
+	shadowCoordNDC.y = 1-shadowCoordNDC.y;
+#endif
+#if BGFX_SHADER_LANGUAGE_GLSL!=0
 	vec4 shadowCoord = mul(u_lightMtx, vec4(v_wpos, 1.0));
 	vec3 shadowCoordNDC = shadowCoord.xyz / shadowCoord.w;
-	shadowCoordNDC = shadowCoordNDC*0.5+0.5;
+	shadowCoordNDC = shadowCoordNDC*0.5+0.5; //三坐标范围0~1
+#endif
 	
-	float t = 1.0 / 512.0; //t->texelSize
+	float t = 1.0 / TEXCOUNT; //t->texelSize
 	vec4 lightIntensity = vec4_splat(0.0);
 	lightIntensity += vec4_splat(shadow2D(s_shadowMap, vec3(shadowCoordNDC.xy+vec2(-t,-t), shadowCoordNDC.z-bias)));
 	lightIntensity += vec4_splat(shadow2D(s_shadowMap, vec3(shadowCoordNDC.xy+vec2( 0,-t), shadowCoordNDC.z-bias)));
@@ -51,6 +58,6 @@ void main()
 	
 	float squareDistance = dot(shadowCoordNDC.xy*2.0-1.0, shadowCoordNDC.xy*2.0-1.0);
 	lightIntensity.x *= squareDistance>0.05 ? 1.1 - squareDistance*2.0 : 1.0; // 聚光灯效果
-	lightIntensity.x = max(lightIntensity.x, 0.0);
-	gl_FragColor = vec4(vec3_splat(lightIntensity.x), 0);
+	lightIntensity.x = max(lightIntensity.x, 0.0)*0.9;
+	gl_FragColor = vec4(vec3_splat(lightIntensity.x)+0.1, 0);
 }

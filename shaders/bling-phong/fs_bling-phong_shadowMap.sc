@@ -8,6 +8,8 @@ uniform vec4 u_lightRGB;
 uniform mat4 u_lightMtx;
 SAMPLER2DSHADOW(s_shadowMap, 3);
 
+#define TEXCOUNT 1024.0
+
 void main()
 {
 	vec3 normal		= normalize(v_normal);
@@ -39,11 +41,20 @@ void main()
 	vec3 specular = 0.1 * u_lightRGB.xyz / r2 * max(0, pow(dot(normal,half_vec),50.0));
 	
 	float bias = dot(normal, lightdir)>0.0 ? 0.03*(1.1-dot(normal, lightdir)) : 0.005;
+#if BGFX_SHADER_LANGUAGE_HLSL!=0
+	u_lightMtx = transpose(u_lightMtx);
+	vec4 shadowCoord = mul(vec4(v_wpos, 1.0), u_lightMtx);
+	vec3 shadowCoordNDC = shadowCoord.xyz / shadowCoord.w;
+	shadowCoordNDC.xy = shadowCoordNDC.xy*0.5+0.5;
+	shadowCoordNDC.y = 1-shadowCoordNDC.y;
+#endif
+#if BGFX_SHADER_LANGUAGE_GLSL!=0
 	vec4 shadowCoord = mul(u_lightMtx, vec4(v_wpos, 1.0));
 	vec3 shadowCoordNDC = shadowCoord.xyz / shadowCoord.w;
-	shadowCoordNDC = shadowCoordNDC*0.5+0.5;
+	shadowCoordNDC = shadowCoordNDC*0.5+0.5; //三坐标范围0~1
+#endif
 	
-	float t = 1.0 / 512.0; //t->texelSize
+	float t = 1.0 / TEXCOUNT; //t->texelSize
 	vec4 lightIntensity = vec4_splat(0.0);
 	lightIntensity += vec4_splat(shadow2D(s_shadowMap, vec3(shadowCoordNDC.xy+vec2(-t,-t), shadowCoordNDC.z-bias)));
 	lightIntensity += vec4_splat(shadow2D(s_shadowMap, vec3(shadowCoordNDC.xy+vec2( 0,-t), shadowCoordNDC.z-bias)));

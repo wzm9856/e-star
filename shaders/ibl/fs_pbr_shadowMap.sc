@@ -11,8 +11,10 @@ SAMPLER2D(s_texBrdfLut, 6);
 SAMPLER2D(s_texAORM, 7);
 uniform vec4 u_lightRGB;
 uniform mat4 u_lightMtx;
+uniform int u_shadowMapSize;
 
 #define PI 3.14159265359
+#define TEXCOUNT 1024.0
 
 vec3 fresnelSchlick(float cosTheta, vec3 F0)
 {
@@ -63,9 +65,16 @@ void main(){
 	vec3 tangent 	= normalize(v_tangent);
 	
 	vec3 bitangent = cross(tangent, normal);
-	mat3 TBN = mat3(tangent, bitangent, normal);
 	vec3 normalTex = texture2D(s_texNormal, v_texcoord0).xyz;
+#if BGFX_SHADER_LANGUAGE_GLSL!=0
+	mat3 TBN = mat3(tangent, bitangent, normal);
 	normal = normalize(mul(TBN, normalTex));
+#endif
+#if BGFX_SHADER_LANGUAGE_HLSL!=0
+	mat3 TBN = mtxFromCols(tangent, bitangent, normal);
+	TBN = transpose(TBN);
+	normal = normalize(mul(normalTex, TBN));
+#endif
 	float NdV = dot(normal, viewdir);
 	float NdL = dot(normal, lightdir);
 	vec3 reflectdir	= normalize(reflect(-viewdir, normal));
@@ -92,11 +101,20 @@ void main(){
 	vec3 envSpecular = envSpecularColor * (F * brdf.x + brdf.y);
 	
 	float bias = NdL>0.0 ? 0.03*(1.1-NdL) : 0.005;
+#if BGFX_SHADER_LANGUAGE_HLSL!=0
+	u_lightMtx = transpose(u_lightMtx);
+	vec4 shadowCoord = mul(vec4(v_wpos, 1.0), u_lightMtx);
+	vec3 shadowCoordNDC = shadowCoord.xyz / shadowCoord.w;
+	shadowCoordNDC.xy = shadowCoordNDC.xy*0.5+0.5;
+	shadowCoordNDC.y = 1-shadowCoordNDC.y;
+#endif
+#if BGFX_SHADER_LANGUAGE_GLSL!=0
 	vec4 shadowCoord = mul(u_lightMtx, vec4(v_wpos, 1.0));
 	vec3 shadowCoordNDC = shadowCoord.xyz / shadowCoord.w;
-	shadowCoordNDC = shadowCoordNDC*0.5+0.5;
+	shadowCoordNDC = shadowCoordNDC*0.5+0.5; //三坐标范围0~1
+#endif
 	
-	float t = 1.0 / 512.0; //t->texelSize
+	float t = 1.0 / TEXCOUNT; //t->texelSize
 	vec4 lightIntensity = vec4_splat(0.0);
 	lightIntensity += vec4_splat(shadow2D(s_shadowMap, vec3(shadowCoordNDC.xy+vec2(-t,-t), shadowCoordNDC.z-bias)));
 	lightIntensity += vec4_splat(shadow2D(s_shadowMap, vec3(shadowCoordNDC.xy+vec2( 0,-t), shadowCoordNDC.z-bias)));

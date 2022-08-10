@@ -1,6 +1,5 @@
 @echo off
-D:
-cd D:\Projects\project-e-star-homework\shaders
+cd ../shaders
 
 :shaderc -f ./pbr/vs_pbr.sc -o ./pbr/vs_pbr_hlsl.bin --type vertex --platform windows -p s_5_0
 :if errorlevel 1 pause:

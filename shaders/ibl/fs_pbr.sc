@@ -62,9 +62,16 @@ void main(){
 	vec3 tangent 	= normalize(v_tangent);
 	
 	vec3 bitangent = cross(tangent, normal);
-	mat3 TBN = mat3(tangent, bitangent, normal);
 	vec3 normalTex = texture2D(s_texNormal, v_texcoord0).xyz;
+#if BGFX_SHADER_LANGUAGE_GLSL!=0
+	mat3 TBN = mat3(tangent, bitangent, normal);
 	normal = normalize(mul(TBN, normalTex));
+#endif
+#if BGFX_SHADER_LANGUAGE_HLSL!=0
+	mat3 TBN = mtxFromCols(tangent, bitangent, normal);
+	TBN = transpose(TBN);
+	normal = normalize(mul(normalTex, TBN));
+#endif
 	float NdV = dot(normal, viewdir);
 	float NdL = dot(normal, lightdir);
 	vec3 reflectdir	= normalize(reflect(-viewdir, normal));

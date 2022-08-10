@@ -209,6 +209,7 @@ public:
 		m_debug  = BGFX_DEBUG_TEXT;
 		m_reset  = BGFX_RESET_VSYNC;
 
+		/// /////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		bgfx::Init init;
 		//init.type = bgfx::RendererType::Direct3D11;
 		init.type = bgfx::RendererType::OpenGL;
@@ -243,7 +244,7 @@ public:
 		m_skyboxProgram = myloadProgram("../shaders/ibl/", "vs_skybox", "fs_skybox", init.type);
 		m_groundProgram = myloadProgram("../shaders/shadowMap/ground/", "vs_ground", "fs_ground", init.type);
 		m_shadowProgram = myloadProgram("../shaders/shadowMap/shadow/", "vs_shadow", "fs_shadow", init.type);
-		m_testProgram	= myloadProgram("../shaders/shadowMap/test/", "vs_test", "fs_test", init.type);
+		m_testProgram	= myloadProgram("../shaders/shadowMap/test/", "vs_test", "fs_test", init.type); // 用于在左下角显示深度图
 		BX_ASSERT(bgfx::isValid(m_pbrProgram), "m_pbrProgram is not valid");
 		BX_ASSERT(bgfx::isValid(m_blpProgram), "m_blpProgram is not valid");
 		BX_ASSERT(bgfx::isValid(m_pbrShadowProgram), "m_pbrShadowProgram is not valid");
@@ -290,8 +291,8 @@ public:
 		BX_ASSERT(bgfx::isValid(m_textureBlackLod), "m_textureBlackLod is not valid");
 		BX_ASSERT(bgfx::isValid(m_textureBlackIrr), "m_textureBlackIrr is not valid");
 		BX_ASSERT(bgfx::isValid(m_textureBrdfLut), "m_textureBrdfLut is not valid");
-		m_shadowMap	= bgfx::createTexture2D(512, 512, false, 1, bgfx::TextureFormat::D16, BGFX_TEXTURE_RT | BGFX_SAMPLER_COMPARE_LEQUAL);
-		m_shadowMapInRGB = bgfx::createTexture2D(512, 512, false, 1, bgfx::TextureFormat::RGBA8, BGFX_TEXTURE_RT);
+		m_shadowMap	= bgfx::createTexture2D(m_shadowMapSize, m_shadowMapSize, false, 1, bgfx::TextureFormat::D16, BGFX_TEXTURE_RT | BGFX_SAMPLER_COMPARE_LEQUAL);
+		m_shadowMapInRGB = bgfx::createTexture2D(m_shadowMapSize, m_shadowMapSize, false, 1, bgfx::TextureFormat::RGBA8, BGFX_TEXTURE_RT);
 		bgfx::TextureHandle texturesForShadowFBO[] = { m_shadowMap, m_shadowMapInRGB };
 		m_shadowMapFBO = bgfx::createFrameBuffer(BX_COUNTOF(texturesForShadowFBO), texturesForShadowFBO, true);
 		BX_ASSERT(bgfx::isValid(m_shadowMapFBO), "m_shadowMapFBO is not valid");
@@ -365,7 +366,7 @@ public:
 		m_state[3]->m_textures[0].m_sampler = s_shadowMap;
 		m_state[3]->m_textures[0].m_texture = m_shadowMap;
 
-		// state4 ->view3 渲染深度图
+		// state4 ->view3 渲染左下角深度示意图
 		m_state[4] = meshStateCreate();
 		m_state[4]->m_state = BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_DEPTH_TEST_LESS;
 		m_state[4]->m_program = m_testProgram;
@@ -513,7 +514,7 @@ public:
 				bx::mtxMul(m_groundModel, m_groundScale, m_model);
 			}
 
-			bgfx::setViewRect(0, 0, 0, uint16_t(m_width), uint16_t(m_height)); // view0渲染相机视角深度
+			bgfx::setViewRect(0, 0, 0, m_shadowMapSize, m_shadowMapSize); // view0渲染相机视角深度
 			bgfx::setViewRect(1, 0, 0, uint16_t(m_width), uint16_t(m_height)); // view1渲染天空盒
 			bgfx::setViewRect(2, 0, 0, uint16_t(m_width), uint16_t(m_height)); // view2渲染模型
 			bgfx::setViewRect(3, 0, uint16_t(m_height / 3*2), uint16_t(m_width/3), uint16_t(m_height/3)); // view3渲染深度图
@@ -572,7 +573,7 @@ public:
 			VBOSubmit(m_state[1], m_model, m_skyboxVBO, m_skyboxIBO);// 理论上此处model是需要去掉平移量，但是本来model也没平移，只是纯旋转
 
 			if (m_pt == 1) {
-				m_lightrgb = { 1000 * (float)m_lightsOn,1000 * (float)m_lightsOn,1000 * (float)m_lightsOn,0};
+				m_lightrgb = { 1500 * (float)m_lightsOn,1500 * (float)m_lightsOn,1500 * (float)m_lightsOn,0};
 				if (m_shadowOn) {
 					bgfx::setUniform(u_lightMtx, m_lightMtx);
 					m_state[2]->m_program = m_blpShadowProgram;
@@ -581,7 +582,7 @@ public:
 					m_state[2]->m_program = m_blpProgram;
 			}
 			else if (m_pt == 0) {
-				m_lightrgb = { 3000 * (float)m_lightsOn,3000 * (float)m_lightsOn,3000 * (float)m_lightsOn,0 };
+				m_lightrgb = { 5000 * (float)m_lightsOn,5000 * (float)m_lightsOn,5000 * (float)m_lightsOn,0 };
 				if (m_shadowOn) {
 					bgfx::setUniform(u_lightMtx, m_lightMtx);
 					m_state[2]->m_program = m_pbrShadowProgram;
@@ -668,6 +669,7 @@ public:
 	float	m_lightProj[16] = { 0 };
 	float	m_lightMtx[16] = { 0 };	
 	float	m_normalMtx[9] = { 0 };
+	int		m_shadowMapSize = 1024;
 	Vec4 m_at = { 0.0f, 0.0f, 0.0f, 0.0f }; //at是视点，eye是相机坐标
 	Vec4 m_eye = { 0.0f, 0.0f, -20.0f, 0.0f };
 	Vec4 m_lightat = { 0.0f, 0.0f, 0.0f, 0.0f }; //at是视点，eye是光源坐标
